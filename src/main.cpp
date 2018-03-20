@@ -62,7 +62,7 @@ int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vect
 
 }
 
-int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y)
+int NextWaypoint(double x, double y, double theta, vector<double> maps_x, vector<double> maps_y, vector<double> maps_dx, vector<double> maps_dy)
 {
 
 	int closestWaypoint = ClosestWaypoint(x,y,maps_x,maps_y);
@@ -70,7 +70,7 @@ int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x,
 	double map_x = maps_x[closestWaypoint];
 	double map_y = maps_y[closestWaypoint];
 
-	double heading = atan2((map_y-y),(map_x-x));
+	/*double heading = atan2((map_y-y),(map_x-x));
 
 	double angle = fabs(theta-heading);
   angle = min(2*pi() - angle, angle);
@@ -82,15 +82,31 @@ int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x,
   {
     closestWaypoint = 0;
   }
-  }
+	}*/
+	
+	//heading vector
+	double hx = map_x-x;
+	double hy = map_y-y;
+	//normal vector
+	double nx = maps_dx[closestWaypoint];
+	double ny = maps_dy[closestWaypoint];
+	//vector into the direction of the road
+	double vx = -ny;
+	double vy = nx;
+
+	double inner = hx*vx+hy*vy;
+	if(inner<0.0)
+	{
+		closestWaypoint++;
+	}
 
   return closestWaypoint;
 }
 
 // Transform from Cartesian x,y coordinates to Frenet s,d coordinates
-vector<double> getFrenet(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y)
+vector<double> getFrenet(double x, double y, double theta, vector<double> maps_x, vector<double> maps_y, vector<double> maps_dx, vector<double> maps_dy)
 {
-	int next_wp = NextWaypoint(x,y, theta, maps_x,maps_y);
+	int next_wp = NextWaypoint(x,y, theta, maps_x,maps_y, maps_dx, maps_dy);
 
 	int prev_wp;
 	prev_wp = next_wp-1;
@@ -137,7 +153,7 @@ vector<double> getFrenet(double x, double y, double theta, const vector<double> 
 }
 
 // Transform from Frenet s,d coordinates to Cartesian x,y
-vector<double> getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
+vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y)
 {
 	int prev_wp = -1;
 
@@ -204,7 +220,7 @@ int main() {
 	int lane = 1; //starting lane
 	double ref_vel = 49.5; // target speed
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -241,10 +257,11 @@ int main() {
           	// Sensor Fusion Data, a list of all other cars on the same side of the road.
           	auto sensor_fusion = j[1]["sensor_fusion"];
 
-          	json msgJson;
+						int prev_size = previous_path_x.size();
+          	//json msgJson;
 
-          	vector<double> next_x_vals;
-          	vector<double> next_y_vals;
+          	//vector<double> next_x_vals;
+          	//vector<double> next_y_vals;
 
 
 						// list of widely spaced (x,y) waypoints
@@ -300,7 +317,7 @@ int main() {
 							double shift_x = ptsx[i]-ref_x;
 							double shift_y = ptsy[i]-ref_y;
 
-							ptsx[] = (shift_x*cos(0-ref_yaw)-shift_y*sin(0-ref_yaw));
+							ptsx[i] = (shift_x*cos(0-ref_yaw)-shift_y*sin(0-ref_yaw));
 							ptsy[i] = (shift_x * sin(0-ref_yaw)+shift_y*cos(0-ref_yaw));
 
 						}
@@ -352,7 +369,8 @@ int main() {
 									next_x_vals.push_back(xy[0]);
 									next_y_vals.push_back(xy[1]);
 						}
-
+						
+						json msgJson; 
           	msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
 
