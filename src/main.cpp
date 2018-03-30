@@ -220,7 +220,7 @@ int main() {
 	int lane = 1; //starting lane
 	double ref_vel = 49.5; // target speed
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane,&ref_vel](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -296,6 +296,13 @@ int main() {
 
 								double ref_x_prev = previous_path_x[prev_size-2];
 								double ref_y_prev = previous_path_y[prev_size-2];
+								ref_yaw = atan2(ref_y-ref_y_prev, ref_x - ref_x_prev);
+
+								ptsx.push_back(ref_x_prev);
+								ptsx.push_back(ref_x);
+	
+								ptsy.push_back(ref_y_prev);
+								ptsy.push_back(ref_y);
 						}
 
 						//in frenet, add evenly 30m spaced points ahead of the starting ref
@@ -350,12 +357,28 @@ int main() {
 
 						for(int i=1;i<=50-previous_path_x.size();i++)
 						{
+							double N = (target_dist/(.02*ref_vel/2.24));
+							double x_point = x_add_on+(target_x)/N;
+							double y_point = s(x_point);
 							
+							x_add_on = x_point;
+
+							double x_ref = x_point;
+							double y_ref = y_point;
+							
+							x_point = (x_ref * cos(ref_yaw)-y_ref*sin(ref_yaw));
+							y_point = (x_ref * sin(ref_yaw)+y_ref*cos(ref_yaw));
+
+							x_point += ref_x;
+							y_point += ref_y;
+
+							next_x_vals.push_back(x_point);
+							next_y_vals.push_back(y_point);
 
 						}
 
 						// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-						
+						/*
 						double dist_inc = 0.4;
 						double next_x = 0.0;
 						double next_s = 0.0;
@@ -369,7 +392,8 @@ int main() {
 									next_x_vals.push_back(xy[0]);
 									next_y_vals.push_back(xy[1]);
 						}
-						
+						*/
+
 						json msgJson; 
           	msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
