@@ -219,14 +219,17 @@ int main() {
 	
 	int lane = 1; //starting lane
 	double ref_vel = 49.5; // target speed
+	// Keep a count of lane changes in the last 5 cycles
+  int num_lane_shifts = 1;
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane,&ref_vel](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane,&ref_vel, &num_lane_shifts](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     //auto sdata = string(data).substr(0, length);
-    //cout << sdata << endl;
+		//cout << sdata << endl;
+		// d is lateral and y is longitudinal
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
 
       auto s = hasData(data);
@@ -263,6 +266,82 @@ int main() {
           	//vector<double> next_x_vals;
           	//vector<double> next_y_vals;
 
+						if(prev_size > 0){
+							car_s = end_path_s; //prev car path becomes current path if there are points
+						}
+
+						bool too_close = false;
+
+						bool left_lane_clear = true;
+						bool right_lane_clear = true;
+				
+						// find ref_v to use
+						for (int i=0; i<sensor_fusion.size(); i++){
+								// car is in my lane
+								double vx = sensor_fusion[i][3];
+								double vy = sensor_fusion[i][4];
+								double check_speed = sqrt(vx*vx + vy*vy);
+								double check_car_s = sensor_fusion[i][5];
+														
+								check_car_s += ((double)prev_size* 0.02*check_speed); // if using previous points can project s value out
+								// std::cout << check_speed << std::endl;
+				
+								double min_front_dist = 30.0; // minimum safe distance from the front car
+								double min_rear_dist = 40.0; // minimum safe distance from the rear car
+								
+								// checking here if car is in my lane
+								float d = sensor_fusion[i][6];
+								// each lane is 4 mts
+								if(d < (2+4*lane+2) && d > (2+4*lane-2)){
+									//check s values greater than mine and s gap
+									if((check_car_s > car_s) && ((check_car_s-car_s) < min_front_dist)){
+										// Do dome logic here, linear reference velocity so we dont crash into the car infront of us,
+										// could also flag to try to change lanes.
+										// ref_vel = 49.5; //mph
+										too_close = true;
+										if((check_car_s > car_s) && ((check_car_s-car_s) < (min_front_dist*0.5))){
+											ref_vel -= 0.80; // brake a bit harder if too close
+											std::cout << "Unsafe Distance - Hard Brake" << std::endl;
+										}
+									}
+								}
+
+								if(too_close){
+							// check if a lane change is possible
+									int left_lane = lane - 1;
+									if(lane>0 && left_lane_clear && d<(2+4*left_lane+2) && d>(2+4*left_lane-2)){
+										if(((check_car_s > car_s) && (check_car_s-car_s < min_front_dist*1.3)) || (check_car_s < car_s && ((car_s - check_car_s) < min_rear_dist))){
+											left_lane_clear = false;
+										}
+									}
+				
+									int right_lane = lane + 1;
+									if(lane<2 && right_lane_clear && d<(2+4*right_lane+2) && d>(2+4*right_lane-2)){
+										if(((check_car_s > car_s) && (check_car_s-car_s < min_front_dist*1.3)) || (check_car_s < car_s && ((car_s - check_car_s) < min_rear_dist))){
+											right_lane_clear = false;
+										}
+									}
+								}
+								num_lane_shifts += 1;
+							}
+				
+							if(too_close){
+								ref_vel -= 0.35;
+				
+									if(lane>0 && left_lane_clear && (num_lane_shifts % 5 == 0)){
+										std::cout << "Left Lane Safe - Steering Left" << std::endl;
+										lane -= 1;
+										num_lane_shifts += 1;
+									} 
+									else if(lane<2 && right_lane_clear && (num_lane_shifts % 5 == 0)){
+										std::cout << "Right Lane Safe - Steering Right" << std::endl;
+										lane += 1;
+										num_lane_shifts += 1;
+									}
+
+								} else if(ref_vel <= 49.3){
+										 ref_vel += 0.5;
+								}
 
 						// list of widely spaced (x,y) waypoints
 						vector<double> ptsx;
@@ -315,9 +394,9 @@ int main() {
 						ptsx.push_back(next_wp1[0]);
 						ptsx.push_back(next_wp2[0]);
 
-						ptsy.push_back(next_wp0[0]);
-						ptsy.push_back(next_wp1[0]);
-						ptsy.push_back(next_wp2[0]);
+						ptsy.push_back(next_wp0[1]);
+						ptsy.push_back(next_wp1[1]);
+						ptsy.push_back(next_wp2[1]);
 
 						for(int i=0; i< ptsx.size(); i++)
 						{
