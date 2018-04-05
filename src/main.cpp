@@ -218,7 +218,7 @@ int main() {
 	}
 	
 	int lane = 1; //starting lane
-	double ref_vel = 49.5; // target speed
+	double ref_vel = 10; // target speed
 	// Keep a count of lane changes in the last 5 cycles
   int num_lane_shifts = 1;
 
